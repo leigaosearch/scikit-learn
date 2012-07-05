@@ -218,7 +218,9 @@ def test_load_with_offsets():
     # XXX: the following tests is broken: precision does not seem to be
     # preserved at all (at least not at dtype level)
     print
-    print X[0].data[:10]
-    print X_0[0].data[:10]
+    print "original:", X[0].data
+    print "parsed:  ", X_0[0].data
+    print "svmlight:", f.seek(0)
+    print f.readline()
     assert_array_almost_equal(X.toarray(), X_concat.toarray(), 5)
     assert_array_equal(y, y_concat)
