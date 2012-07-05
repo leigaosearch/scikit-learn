@@ -6,7 +6,11 @@ import os
 import shutil
 import tempfile
 
-from numpy.testing import assert_equal, assert_array_equal
+from scipy import sparse as sp
+
+from numpy.testing import assert_equal
+from numpy.testing import assert_array_equal
+from numpy.testing import assert_array_almost_equal
 from nose.tools import raises
 
 from sklearn.datasets import (load_svmlight_file, load_svmlight_files,
@@ -174,3 +178,47 @@ def test_dump():
             X2, y2 = load_svmlight_file(f, zero_based=zero_based)
             assert_array_equal(Xd, X2.toarray())
             assert_array_equal(y, y2)
+
+
+def test_load_with_offsets():
+    # Generate a uniformly random sparse matrix
+    rng = np.random.RandomState(0)
+    n_samples = 100
+    n_features = 200
+    X = rng.uniform(low=0.0, high=1.0, size=(n_samples, n_features))
+    # Set 5% of non-zeros (95% sparse)
+    X[X < 0.95] = 0.0
+    X = sp.csr_matrix(X)
+    X.data -= X.data.mean()
+    X.data /= X.data.std()
+    y = rng.random_integers(low=0, high=1, size=n_samples)
+
+    f = BytesIO()
+    dump_svmlight_file(X, y, f)
+    f.seek(0)
+
+    size = len(f.getvalue())
+
+    # put some marks that are likely to happen anywhere in a row
+    mark_0 = 0
+    mark_1 = size / 3
+    mark_2 = 4 * size / 5
+    mark_3 = size * 3
+
+    # load the original sparse matrix into 3 independant CSR matrices
+    X_0, y_0 = load_svmlight_file(f, n_features=n_features,
+                                  offset_min=mark_0, offset_max=mark_1)
+    X_1, y_1 = load_svmlight_file(f, n_features=n_features,
+                                  offset_min=mark_1, offset_max=mark_2)
+    X_2, y_2 = load_svmlight_file(f, n_features=n_features,
+                                  offset_min=mark_2, offset_max=mark_3)
+
+    X_concat = sp.vstack([X_0, X_1, X_2])
+    y_concat = np.concatenate([y_0, y_1, y_2])
+    # XXX: the following tests is broken: precision does not seem to be
+    # preserved at all (at least not at dtype level)
+    print
+    print X[0].data[:10]
+    print X_0[0].data[:10]
+    assert_array_almost_equal(X.toarray(), X_concat.toarray(), 5)
+    assert_array_equal(y, y_concat)
