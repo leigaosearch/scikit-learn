@@ -28,7 +28,8 @@ from ._svmlight_format import _load_svmlight_file
 
 
 def load_svmlight_file(f, n_features=None, dtype=np.float64,
-                       multilabel=False, zero_based="auto"):
+                       multilabel=False, zero_based="auto", offset_min=0,
+                       offset_max=-1):
     """Load datasets in the svmlight / libsvm format into sparse CSR matrix
 
     This format is a text-based format, with one sample per line. It does
@@ -78,6 +79,15 @@ def load_svmlight_file(f, n_features=None, dtype=np.float64,
         but they are unfortunately not self-identifying. Using "auto" or True
         should always be safe.
 
+    offset_min: integer, optional (default is 0)
+        Ignore the offset_min first bytes by seeking forward, then
+        discarding the following bytes up until the next new line
+        character.
+
+    offset_max: integer, optional (default is -1)
+        If not -1, stop reading any new line of data once the position in
+        the file has reached the offset_max bytes threshold.
+
     Returns
     -------
     (X, y)
@@ -92,7 +102,7 @@ def load_svmlight_file(f, n_features=None, dtype=np.float64,
     format, enforcing the same number of features/columns on all of them.
     """
     return tuple(load_svmlight_files([f], n_features, dtype, multilabel,
-                                     zero_based))
+                                     zero_based, offset_min, offset_max))
 
 
 def _gen_open(f):
@@ -110,16 +120,20 @@ def _gen_open(f):
         return open(f, "rb")
 
 
-def _open_and_load(f, dtype, multilabel, zero_based):
+def _open_and_load(f, dtype, multilabel, zero_based, offset_min=0,
+                   offset_max=-1):
     if hasattr(f, "read"):
-        return _load_svmlight_file(f, dtype, multilabel, zero_based)
+        return _load_svmlight_file(f, dtype, multilabel, zero_based,
+                                   offset_min, offset_max)
     # XXX remove closing when Python 2.7+/3.1+ required
     with closing(_gen_open(f)) as f:
-        return _load_svmlight_file(f, dtype, multilabel, zero_based)
+        return _load_svmlight_file(f, dtype, multilabel, zero_based,
+                                   offset_min, offset_max)
 
 
 def load_svmlight_files(files, n_features=None, dtype=np.float64,
-                        multilabel=False, zero_based="auto"):
+                        multilabel=False, zero_based="auto",
+                        offset_min=0, offset_max=-1):
     """Load dataset from multiple files in SVMlight format
 
     This function is equivalent to mapping load_svmlight_file over a list of
@@ -151,6 +165,15 @@ def load_svmlight_files(files, n_features=None, dtype=np.float64,
         but they are unfortunately not self-identifying. Using "auto" or True
         should always be safe.
 
+    offset_min: integer, optional (default is 0)
+        Ignore the offset_min first bytes by seeking forward, then
+        discarding the following bytes up until the next new line
+        character.
+
+    offset_max: integer, optional (default is -1)
+        If not -1, stop reading any new line of data once the position in
+        the file has reached the offset_max bytes threshold.
+
     Returns
     -------
     [X1, y1, ..., Xn, yn]
@@ -168,7 +191,9 @@ def load_svmlight_files(files, n_features=None, dtype=np.float64,
     --------
     load_svmlight_file
     """
-    r = [_open_and_load(f, dtype, multilabel, bool(zero_based)) for f in files]
+    r = [_open_and_load(f, dtype, multilabel, bool(zero_based),
+                        offset_min=offset_min,
+                        offset_max=offset_max) for f in files]
 
     if zero_based is False \
      or zero_based == "auto" and all(np.min(indices) > 0

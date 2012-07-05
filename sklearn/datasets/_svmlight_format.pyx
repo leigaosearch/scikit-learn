@@ -25,7 +25,8 @@ cdef bytes COMMA = u','.encode('ascii')
 cdef bytes COLON = u':'.encode('ascii')
 
 
-def _load_svmlight_file(f, dtype, bint multilabel, bint zero_based):
+def _load_svmlight_file(f, dtype, bint multilabel, bint zero_based,
+                        long long offset_min, long long offset_max):
     cdef bytes line
     cdef char *hash_ptr, *line_cstr
     cdef Py_ssize_t hash_idx
@@ -37,6 +38,12 @@ def _load_svmlight_file(f, dtype, bint multilabel, bint zero_based):
         labels = []
     else:
         labels = ArrayBuilder(dtype=np.double)
+
+    if offset_min > 0:
+        f.seek(offset_min)
+        # drop the previous line that might be truncated and is to be fetched
+        # by another call
+        f.readline()
 
     for line in f:
         # skip comments
@@ -69,6 +76,9 @@ def _load_svmlight_file(f, dtype, bint multilabel, bint zero_based):
                         "invalid index %d in SVMlight/LibSVM data file" % idx)
             indices.append(idx)
             data.append(dtype(value))
+        if offset_max != -1 and f.tell() >= offset_max:
+            # Stop here and let another call deal with the following.
+            break
 
     indptr.append(len(data))
 
